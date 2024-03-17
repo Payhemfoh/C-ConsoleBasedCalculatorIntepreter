@@ -2,7 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <list>
+#include <unordered_map>
 #include <sstream>
 #include <cmath>
 #include <algorithm>
@@ -11,9 +11,10 @@
 
 enum OperatorType
 {
-	VALUE = 0,
-	VARIABLE = 1,
-	OPERATOR = 2
+	EMPTY = 0,
+	VALUE = 1,
+	VARIABLE = 2,
+	OPERATOR = 3
 };
 
 enum Operation
@@ -26,10 +27,36 @@ enum Operation
 	EXPONENT = 5
 };
 
+struct Input
+{
+	std::string value;
+	OperatorType type;
+	int precedence;
+
+	Input();
+	Input(std::string value, OperatorType type, int precendence);
+};
+
 class Calculator
 {
 private:
-	std::vector<std::pair<std::string, OperatorType>> user_input;
+	std::unordered_map<std::string, int> precedence_map = {
+		{"+", 1},
+		{"-", 1},
+		{"*", 2},
+		{"/", 2},
+		{"**", 3},
+	};
+	std::unordered_map<std::string, Operation> operation_map = {
+		{"+", Operation::ADDITION},
+		{"-", Operation::SUBTRACTION},
+		{"*", Operation::MULTIPLY},
+		{"/", Operation::DIVISION},
+		{"**", Operation::EXPONENT},
+	};
+
+	//std::vector<std::pair<std::string, OperatorType>> user_input;
+	std::vector<Input> user_input;
 	double result;
 	bool is_running;
 
@@ -40,6 +67,7 @@ private:
 	bool checkTerminateCommand(const std::string& command);
 
 	void displayResult() const;
+	int getOperatorPrecedence(std::string operation) const;
 	Operation getOperation(std::string operation) const;
 	double Calculation(double x, double y, Operation e) const;
 public:

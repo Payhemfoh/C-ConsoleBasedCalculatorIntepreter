@@ -17,6 +17,20 @@ static void trim(std::string& s) {
 	rtrim(s);
 }
 
+Input::Input()
+{
+	value = "";
+	type = OperatorType::EMPTY;
+	precedence = -1;
+}
+
+Input::Input(std::string value, OperatorType type, int precendence)
+{
+	this->value = value;
+	this->type = type;
+	this->precedence = precendence;
+}
+
 std::string Calculator::getUserInput()
 {
 	std::string input;
@@ -53,15 +67,19 @@ void Calculator::splitUserInput(std::string input)
 	{
 		if (isdigit(input_segment[0]))
 		{
-			this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::VALUE));
+			this->user_input.push_back(Input(input_segment, OperatorType::VALUE, -1));
+			//this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::VALUE));
 		}
 		else if (isalpha(input_segment[0]))
 		{
-			this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::VARIABLE));
+			this->user_input.push_back(Input(input_segment, OperatorType::VARIABLE, -1));
+			//this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::VARIABLE));
 		}
 		else
 		{
-			this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::OPERATOR));
+			int operator_precendence = getOperatorPrecedence(input_segment);
+			this->user_input.push_back(Input(input_segment, OperatorType::OPERATOR, operator_precendence));
+			//this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::OPERATOR));
 		}
 	}
 }
@@ -91,32 +109,20 @@ double Calculator::Calculation(double x, double y, Operation e) const
 	return result;
 }
 
+int Calculator::getOperatorPrecedence(std::string operation) const
+{
+	if (precedence_map.find(operation) == precedence_map.end())
+		return 0;
+
+	return precedence_map.at(operation);
+}
+
 Operation Calculator::getOperation(std::string operation) const
 {
-	Operation type = Operation::NONE;
-
-	if (operation == "+")
-	{
-		type = Operation::ADDITION;
-	}
-	else if (operation == "-")
-	{
-		type = Operation::SUBTRACTION;
-	}
-	else if (operation == "*")
-	{
-		type = Operation::MULTIPLY;
-	}
-	else if (operation == "/")
-	{
-		type = Operation::DIVISION;
-	}
-	else if (operation == "**")
-	{
-		type = Operation::EXPONENT;
-	}
-
-	return type;
+	if (operation_map.find(operation) == operation_map.end())
+		return Operation::NONE;
+	
+	return operation_map.at(operation);
 }
 
 void Calculator::computeOperator()
@@ -130,32 +136,41 @@ void Calculator::computeOperator()
 	do {
 		index = -1;
 
-		for (int i = 0; i < user_input.size(); ++i)
+		std::vector<Input>::iterator itr = std::max_element(user_input.begin(), user_input.end(),
+			[](const Input& a, const Input& b) {return a.precedence < b.precedence; });
+
+		int max_precedence = itr->precedence;
+
+		if (max_precedence >= 0)
 		{
-			if (user_input[i].second == OperatorType::OPERATOR) {
-				index = i;
-				break;
+			for (int i = 0; i < user_input.size(); ++i)
+			{
+				if (user_input[i].type == OperatorType::OPERATOR && user_input[i].precedence == max_precedence) {
+					index = i;
+					break;
+				}
 			}
 		}
 
 		if (index >= 0)
 		{
 			//get value before and after the operator
-			double first_value = std::stod(user_input[index - 1].first);
-			double second_value = std::stod(user_input[index + 1].first);
-			Operation operation = this->getOperation(user_input[index].first);
+			double first_value = std::stod(user_input[index - 1].value);
+			double second_value = std::stod(user_input[index + 1].value);
+			Operation operation = this->getOperation(user_input[index].value);
 			//compute the total
 			double result = this->Calculation(first_value, second_value, operation);
 
 			//replace the value back to the list
-			std::vector<std::pair<std::string, OperatorType>> new_list;
+			std::vector<Input> new_list;
 			for (size_t i = 0; i < user_input.size() - 2; ++i)
 			{
 				if (i < index - 1) {
 					new_list.push_back(user_input[i]);
 				}
 				else if (i == index - 1) {
-					new_list.push_back(std::pair<std::string, OperatorType>(std::to_string(result), OperatorType::VALUE));
+					new_list.push_back(Input(std::to_string(result), OperatorType::VALUE, -1));
+					//new_list.push_back(std::pair<std::string, OperatorType>(std::to_string(result), OperatorType::VALUE));
 				}
 				else
 				{
@@ -172,7 +187,7 @@ void Calculator::computeOperator()
 	}
 	else if (user_input.size() == 1)
 	{
-		this->result = std::stod(user_input[0].first);
+		this->result = std::stod(user_input[0].value);
 	}
 }
 
@@ -183,7 +198,7 @@ void Calculator::displayResult() const
 
 	for (const auto& input : user_input)
 	{
-		std::cout << input.first << "\t" << input.second << "\n";
+		std::cout << input.value << "\t" << input.type << "\n";
 	}
 
 	std::cout << "\nThe final result of the equation is: " << this->result << "\n\n" << std::endl;
@@ -243,7 +258,7 @@ std::ostream& Calculator::operator<<(std::ostream& stream)
 
 	for (const auto& input : user_input)
 	{
-		stream << input.first << "\t" << input.second << "\n";
+		stream << input.value << "\t" << input.type << "\n";
 	}
 
 	std::cout << "The final result of the equation is: " << this->result << "\n\n" << std::endl;
