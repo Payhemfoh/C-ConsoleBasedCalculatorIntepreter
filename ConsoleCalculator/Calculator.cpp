@@ -6,7 +6,6 @@ static void ltrim(std::string& s) {
 		std::not1(std::ptr_fun<int, int>(std::isspace))));
 }
 
-
 static void rtrim(std::string& s) {
 	s.erase(std::find_if(s.rbegin(), s.rend(),
 		std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
@@ -15,6 +14,33 @@ static void rtrim(std::string& s) {
 static void trim(std::string& s) {
 	ltrim(s);
 	rtrim(s);
+}
+
+static BracketType isbracket(const char& c) {
+
+	switch (c)
+	{
+	case '(':
+		return BracketType::BRACKET;
+		break;
+	case ')':
+		return BracketType::BRACKETEND;
+		break;
+	case '[':
+		return BracketType::SQUAREBRACKET;
+		break;
+	case ']':
+		return BracketType::SQUAREBRACKETEND;
+		break;
+	case '{':
+		return BracketType::CURLYBRACKET;
+		break;
+	case '}':
+		return BracketType::CURLYBRACKETEND;
+		break;
+	}
+
+	return BracketType::NOTBRACKET;
 }
 
 Input::Input()
@@ -58,30 +84,116 @@ std::string Calculator::getUserInput()
 	return input;
 }
 
-void Calculator::splitUserInput(std::string input)
+int Calculator::findEndOfBracket(BracketType first_bracket, const std::string& input, int cur_pos)
 {
-	std::stringstream input_stream(input);
-
-	std::string input_segment;
-	while (input_stream >> input_segment)
+	int end_bracket_pos = -1;
+	int subbracket = 0;
+	for (int index = cur_pos + 1; index < input.size(); ++index)
 	{
-		if (isdigit(input_segment[0]))
+		//find bracket and get position
+		BracketType type2 = isbracket(input[index]);
+
+		//handle for nested bracket
+		if (type2 == first_bracket)
 		{
-			this->user_input.push_back(Input(input_segment, OperatorType::VALUE, -1));
-			//this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::VALUE));
+			++subbracket;
 		}
-		else if (isalpha(input_segment[0]))
+		else if (type2 == (first_bracket + 3))
 		{
-			this->user_input.push_back(Input(input_segment, OperatorType::VARIABLE, -1));
-			//this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::VARIABLE));
+			--subbracket;
 		}
-		else
+
+		if (subbracket < 0)
 		{
-			int operator_precendence = getOperatorPrecedence(input_segment);
-			this->user_input.push_back(Input(input_segment, OperatorType::OPERATOR, operator_precendence));
-			//this->user_input.push_back(std::pair<std::string, OperatorType>(input_segment, OperatorType::OPERATOR));
+			end_bracket_pos = index;
+			break;
 		}
+
 	}
+
+	return end_bracket_pos;
+}
+
+bool Calculator::checkAndHandleBracket(std::string input, int& cur_pos, std::string& input_segment, std::vector<Input>& user_input)
+{
+	BracketType type = isbracket(input[cur_pos]);
+	if (type == BracketType::NOTBRACKET || type >= BracketType::BRACKETEND)
+		return false;
+
+	//need to clean the input_segment also
+	appendInputSegment(input_segment, user_input);
+
+	//add multiply operator if no operator provided between value and bracket
+	if (user_input.size() != 0 && user_input[user_input.size() - 1].type != OperatorType::OPERATOR) {
+		input_segment = "*";
+		appendInputSegment(input_segment, user_input);
+	}
+
+	//need to handle bracket
+	int end_bracket_pos = findEndOfBracket(type, input, cur_pos);
+	
+	if (end_bracket_pos == -1)
+		return false;
+
+	//extract the substring
+	std::string subequation = input.substr(cur_pos + 1, end_bracket_pos - cur_pos - 1);
+	std::cout << subequation << std::endl;
+
+	//bracket operations
+	switch (type)
+	{
+	case BracketType::BRACKET:
+		//here we use recursion to handle nested equation
+		input_segment = std::to_string(processEquation(subequation));
+		appendInputSegment(input_segment, user_input);
+		break;
+	}
+
+	//move cursor to end of bracket sequence for next element
+	cur_pos = end_bracket_pos;
+
+	return true;
+}
+
+void Calculator::splitUserInput(std::string input, std::vector<Input>& user_input)
+{
+	std::string input_segment;
+	for (int cur_pos = 0; cur_pos < input.size(); ++cur_pos)
+	{
+		if (checkAndHandleBracket(input, cur_pos, input_segment, user_input))
+			continue;
+		else if (isspace(input[cur_pos]))
+		{
+			appendInputSegment(input_segment, user_input);
+			continue;
+		}
+		
+		input_segment.push_back(input[cur_pos]);
+	}
+
+	appendInputSegment(input_segment, user_input);
+}
+
+void Calculator::appendInputSegment(std::string& input, std::vector<Input>& user_input)
+{
+	if (input.size() == 0)
+		return;
+
+	if (isdigit(input[0]))
+	{
+		user_input.push_back(Input(input, OperatorType::VALUE, -1));
+	}
+	else if (isalpha(input[0]))
+	{
+		user_input.push_back(Input(input, OperatorType::VARIABLE, -1));
+	}
+	else
+	{
+		int operator_precendence = getOperatorPrecedence(input);
+		user_input.push_back(Input(input, OperatorType::OPERATOR, operator_precendence));
+	}
+
+	input.clear();
 }
 
 double Calculator::Calculation(double x, double y, Operation e) const
@@ -125,10 +237,10 @@ Operation Calculator::getOperation(std::string operation) const
 	return operation_map.at(operation);
 }
 
-void Calculator::computeOperator()
+void Calculator::computeOperator(std::vector<Input>& user_input, double& result)
 {
 	//main functionality in calculator, need to deal with
-	this->displayResult();
+	this->displayInputStack(user_input);
 
 	//find the operator
 	int index = 0;
@@ -183,25 +295,29 @@ void Calculator::computeOperator()
 	
 	if (user_input.size() < 1)
 	{
-		this->result = 0.0;
+		result = 0.0;
 	}
 	else if (user_input.size() == 1)
 	{
-		this->result = std::stod(user_input[0].value);
+		result = std::stod(user_input[0].value);
 	}
 }
 
-void Calculator::displayResult() const
+void Calculator::displayInputStack(const std::vector<Input>& user_input) const
 {
-	//here, we display the final result
+	//here, we display the splited input
 	std::cout << "Here is the list of your input: \n";
 
 	for (const auto& input : user_input)
 	{
 		std::cout << input.value << "\t" << input.type << "\n";
 	}
+}
 
-	std::cout << "\nThe final result of the equation is: " << this->result << "\n\n" << std::endl;
+void Calculator::displayResult(const double& result) const
+{
+	//here, we display the final result
+	std::cout << "\nThe final result of the equation is: " << result << "\n\n" << std::endl;
 }
 
 //if user input exit or quit, we will terminate the program
@@ -217,32 +333,27 @@ bool Calculator::checkTerminateCommand(const std::string& command)
 	return false;
 }
 
-void Calculator::clearUserInput()
+/*
+void Calculator::clearUserInput(std::vector<Input>& user_input, double& result) const
 {
-	this->user_input.clear();
-	this->result = 0.0;
+	user_input.clear();
+	result = 0.0;
 }
-
+*/
 void Calculator::execute()
 {
 	std::string input;
 	this->is_running = true;
+
 	while (this->is_running)
 	{
 		try {
-			this->clearUserInput();
-
 			input = this->getUserInput();
 
 			if (this->checkTerminateCommand(input))
 				break;
 
-			this->splitUserInput(input);
-
-			//here extract value and operator from user input and compute it
-			this->computeOperator();
-
-			this->displayResult();
+			processEquation(input);
 		}
 		catch (std::exception err)
 		{
@@ -252,16 +363,17 @@ void Calculator::execute()
 	}
 }
 
-std::ostream& Calculator::operator<<(std::ostream& stream)
+double Calculator::processEquation(const std::string& input)
 {
-	std::cout << "Here is the list of your input: \n";
+	std::vector<Input> user_input;
+	double result;
 
-	for (const auto& input : user_input)
-	{
-		stream << input.value << "\t" << input.type << "\n";
-	}
+	this->splitUserInput(input, user_input);
 
-	std::cout << "The final result of the equation is: " << this->result << "\n\n" << std::endl;
+	//here extract value and operator from user input and compute it
+	this->computeOperator(user_input, result);
 
-	return stream;
+	this->displayResult(result);
+
+	return result;
 }
