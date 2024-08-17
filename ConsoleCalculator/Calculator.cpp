@@ -185,6 +185,8 @@ void Calculator::appendInputSegment(std::string& input, std::vector<Input>& user
 	}
 	else if (isalpha(input[0]))
 	{
+		if (variable_map.find(input) == variable_map.end())
+			variable_map.insert(std::pair<std::string, double>(input, DBL_MAX));
 		user_input.push_back(Input(input, OperatorType::VARIABLE, -1));
 	}
 	else
@@ -348,6 +350,9 @@ void Calculator::execute()
 	while (this->is_running)
 	{
 		try {
+			//remember to clear the variables memory before process new round
+			variable_map.clear();
+
 			input = this->getUserInput();
 
 			if (this->checkTerminateCommand(input))
@@ -360,6 +365,8 @@ void Calculator::execute()
 			this->is_running = false;
 			std::cerr << "Software Crashed due to unhandled exception: " << err.what() << std::endl;
 		}
+
+
 	}
 }
 
@@ -370,10 +377,57 @@ double Calculator::processEquation(const std::string& input)
 
 	this->splitUserInput(input, user_input);
 
+	//Here, we get user input for variables
+	this->getVariableValues(user_input);
+
 	//here extract value and operator from user input and compute it
 	this->computeOperator(user_input, result);
 
 	this->displayResult(result);
 
 	return result;
+}
+
+void Calculator::getVariableValues(std::vector<Input>& user_input)
+{
+	//get user input regarding the variables
+	for (auto itr = variable_map.begin(); itr != variable_map.end(); ++itr)
+	{
+		if (itr->second == DBL_MAX)
+		{
+			std::string input;
+			bool is_valid_input = false;
+
+			do {
+				try {
+					std::cout << "Enter value for variable: "<< itr->first <<"=";
+					std::getline(std::cin, input);
+
+					trim(input);
+
+					if (input.size() == 0)
+						throw std::exception("No input received");
+					
+					itr->second = std::stod(input);
+
+					is_valid_input = true;
+				}
+				catch (std::exception err)
+				{
+					std::cout << "Invalid input, please try again!\n";
+					is_valid_input = false;
+				}
+			} while (!is_valid_input);
+		}
+	}
+
+	//replace variables using value obtained
+	for (auto itr = user_input.begin(); itr != user_input.end(); ++itr)
+	{
+		if (itr->type == OperatorType::VARIABLE)
+		{
+			itr->value = std::to_string(variable_map.at(itr->value));
+			itr->type = OperatorType::VALUE;
+		}
+	}
 }
