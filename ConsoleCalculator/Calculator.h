@@ -51,20 +51,24 @@ struct Input
 class Calculator
 {
 private:
-	std::unordered_map<std::string, int> precedence_map = {
+	const std::unordered_map<std::string, int> precedence_map = {
 		{"+", 1},
 		{"-", 1},
 		{"*", 2},
 		{"/", 2},
 		{"**", 3},
 	};
-	std::unordered_map<std::string, Operation> operation_map = {
+	const std::unordered_map<std::string, Operation> operation_map = {
 		{"+", Operation::ADDITION},
 		{"-", Operation::SUBTRACTION},
 		{"*", Operation::MULTIPLY},
 		{"/", Operation::DIVISION},
 		{"**", Operation::EXPONENT},
 	};
+	
+	//use a global set of variable_map instead;
+	std::unordered_map<std::string, double> variable_map;
+
 	bool is_running;
 
 	//void clearUserInput(std::vector<Input>& user_input, double& result) const;
@@ -72,6 +76,7 @@ private:
 	bool checkTerminateCommand(const std::string& command);
 	double processEquation(const std::string& input);
 	void splitUserInput(std::string input, std::vector<Input>& user_input);
+	void getVariableValues(std::vector<Input>& user_input);
 	void appendInputSegment(std::string& input, std::vector<Input>& user_input);
 	int findEndOfBracket(BracketType first_bracket, const std::string& input, int cur_pos);
 	bool checkAndHandleBracket(std::string input, int& cur_pos, std::string& input_segment, std::vector<Input>& user_input);
